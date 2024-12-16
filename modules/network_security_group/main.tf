@@ -1,5 +1,5 @@
 resource "azurerm_resource_group" "example" {
-  name     = "two_vms_resources"
+  name     = "nsg-practice-resources"
   location = "southeastasia"
 }
 
@@ -17,26 +17,17 @@ resource "azurerm_subnet" "default" {
   address_prefixes     = ["10.1.0.0/24"]
 }
 
-resource "azurerm_network_security_group" "nsg" {
-  name                = "nsg"
+resource "azurerm_public_ip" "public_ip" {
+  count               = 1
+  name                = "public-ip-${count.index + 1}"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
-
-  security_rule {
-    name                       = "AllowRDP"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
+  allocation_method   = "Dynamic"
 }
 
+
 resource "azurerm_network_interface" "nic" {
-  count               = 2
+  count               = 1
   name                = "nic${count.index + 1}"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
@@ -46,34 +37,12 @@ resource "azurerm_network_interface" "nic" {
     subnet_id                     = azurerm_subnet.default.id
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.public_ip[count.index].id
+
   }
 }
 
-resource "azurerm_public_ip" "public_ip" {
-  count               = 2
-  name                = "public-ip-${count.index + 1}"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-  allocation_method   = "Dynamic"
-}
-
-resource "azurerm_network_security_rule" "nsg_rule" {
-  count                       = 2
-  name                        = "AllowRDP-${count.index + 1}"
-  priority                    = 1000 + count.index
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_resource_group.example.name
-  network_security_group_name = azurerm_network_security_group.nsg.name
-}
-
 resource "azurerm_windows_virtual_machine" "vm" {
-  count               = 2
+  count               = 1
   name                = "vm${count.index + 1}"
   resource_group_name = azurerm_resource_group.example.name
   location            = azurerm_resource_group.example.location
@@ -94,8 +63,43 @@ resource "azurerm_windows_virtual_machine" "vm" {
     sku       = "2019-Datacenter"
     version   = "latest"
   }
+}
+
+resource "azurerm_network_interface_security_group_association" "example" {
+  network_interface_id      = azurerm_network_interface.nic[0].id
+  network_security_group_id = azurerm_network_security_group.example.id
+}
+
+resource "azurerm_network_security_group" "example" {
+  name                = "acceptanceTestSecurityGroup1"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  security_rule {
+    name                       = "test1234"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3389"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "deny-internet-outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "0.0.0.0/0"
+  }
 
   tags = {
-    environment = "test"
+    environment = "Production"
   }
 }
